@@ -43,7 +43,9 @@ const elements = {
   timeSelect: document.querySelector("#time-select"),
   elevationSelect: document.querySelector("#elevation-select"),
   paletteSelect: document.querySelector("#palette-select"),
-  colorsRangeInput: document.querySelector("#colors-range-input"),
+  scaleMinInput: document.querySelector("#scale-min-input"),
+  scaleMaxInput: document.querySelector("#scale-max-input"),
+  scaleRangeHint: document.querySelector("#scale-range-hint"),
   numBandsInput: document.querySelector("#num-bands-input"),
   opacityInput: document.querySelector("#opacity-input"),
   opacityValue: document.querySelector("#opacity-value"),
@@ -333,7 +335,8 @@ async function updateControlValuesForSelection() {
 
   await populatePaletteOptions(layer);
   await populateScaleRange(layer);
-  elements.colorsRangeInput.disabled = false;
+  elements.scaleMinInput.disabled = false;
+  elements.scaleMaxInput.disabled = false;
   elements.numBandsInput.disabled = false;
   elements.opacityInput.disabled = false;
   elements.logscaleToggle.disabled = false;
@@ -374,19 +377,31 @@ async function populateScaleRange(layer) {
   const scaleRange = extractScaleRange(metadata);
 
   if (!scaleRange) {
-    elements.colorsRangeInput.value = "";
-    elements.colorsRangeInput.placeholder = "auto or min,max";
-    elements.colorsRangeInput.dataset.minScale = "";
-    elements.colorsRangeInput.dataset.maxScale = "";
-    elements.colorsRangeInput.title = "";
+    elements.scaleMinInput.value = "";
+    elements.scaleMaxInput.value = "";
+    elements.scaleMinInput.min = "";
+    elements.scaleMinInput.max = "";
+    elements.scaleMaxInput.min = "";
+    elements.scaleMaxInput.max = "";
+    elements.scaleMinInput.dataset.allowedMin = "";
+    elements.scaleMinInput.dataset.allowedMax = "";
+    elements.scaleMaxInput.dataset.allowedMin = "";
+    elements.scaleMaxInput.dataset.allowedMax = "";
+    elements.scaleRangeHint.textContent = "Allowed range not advertised for this layer.";
     return;
   }
 
-  elements.colorsRangeInput.value = `${scaleRange.min},${scaleRange.max}`;
-  elements.colorsRangeInput.placeholder = `${scaleRange.min},${scaleRange.max}`;
-  elements.colorsRangeInput.dataset.minScale = String(scaleRange.min);
-  elements.colorsRangeInput.dataset.maxScale = String(scaleRange.max);
-  elements.colorsRangeInput.title = `Allowed range: ${scaleRange.min} to ${scaleRange.max}`;
+  elements.scaleMinInput.value = String(scaleRange.min);
+  elements.scaleMaxInput.value = String(scaleRange.max);
+  elements.scaleMinInput.min = String(scaleRange.min);
+  elements.scaleMinInput.max = String(scaleRange.max);
+  elements.scaleMaxInput.min = String(scaleRange.min);
+  elements.scaleMaxInput.max = String(scaleRange.max);
+  elements.scaleMinInput.dataset.allowedMin = String(scaleRange.min);
+  elements.scaleMinInput.dataset.allowedMax = String(scaleRange.max);
+  elements.scaleMaxInput.dataset.allowedMin = String(scaleRange.min);
+  elements.scaleMaxInput.dataset.allowedMax = String(scaleRange.max);
+  elements.scaleRangeHint.textContent = `Allowed range: ${scaleRange.min} to ${scaleRange.max}`;
 }
 
 function populateDimensionSelect(selectElement, dimension, emptyLabel) {
@@ -435,12 +450,13 @@ function applySelectedLayerToMap() {
 }
 
 function buildLayerParams(layer) {
+  const resolvedStyle = buildStyleValue(elements.styleSelect.value, elements.paletteSelect.value);
   const params = {
     service: "WMS",
     request: "GetMap",
     version: state.capabilities?.version || "1.3.0",
     layers: layer.name,
-    styles: elements.styleSelect.value,
+    styles: resolvedStyle,
     format: elements.formatSelect.value || "image/png",
     transparent: String(elements.transparentToggle.checked),
     opacity: Number(elements.opacityInput.value) / 100,
@@ -455,12 +471,9 @@ function buildLayerParams(layer) {
     params.ELEVATION = elements.elevationSelect.value;
   }
 
-  if (elements.paletteSelect.value) {
-    params.PALETTE = elements.paletteSelect.value;
-  }
-
-  if (elements.colorsRangeInput.value.trim()) {
-    params.COLORSCALERANGE = elements.colorsRangeInput.value.trim();
+  const scaleRangeValue = buildScaleRangeValue();
+  if (scaleRangeValue) {
+    params.COLORSCALERANGE = scaleRangeValue;
   }
 
   if (elements.numBandsInput.value.trim()) {
@@ -774,26 +787,28 @@ function normalizeScaleRange(candidate) {
 }
 
 function validateScaleRangeInput() {
-  const rawValue = elements.colorsRangeInput.value.trim();
-  if (!rawValue) {
+  const minRaw = elements.scaleMinInput.value.trim();
+  const maxRaw = elements.scaleMaxInput.value.trim();
+  if (!minRaw && !maxRaw) {
     return { valid: true };
   }
 
-  const parts = rawValue.split(",").map((value) => Number(value.trim()));
-  if (parts.length !== 2 || parts.some((value) => !Number.isFinite(value))) {
-    return { valid: false, message: "Color scale range must be in the form min,max." };
+  const minValue = Number(minRaw);
+  const maxValue = Number(maxRaw);
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    return { valid: false, message: "Scale min and max must both be valid numbers." };
   }
 
-  if (parts[0] > parts[1]) {
+  if (minValue > maxValue) {
     return { valid: false, message: "Color scale range minimum must be less than or equal to the maximum." };
   }
 
-  const allowedMin = Number(elements.colorsRangeInput.dataset.minScale);
-  const allowedMax = Number(elements.colorsRangeInput.dataset.maxScale);
+  const allowedMin = Number(elements.scaleMinInput.dataset.allowedMin);
+  const allowedMax = Number(elements.scaleMinInput.dataset.allowedMax);
   if (
     Number.isFinite(allowedMin) &&
     Number.isFinite(allowedMax) &&
-    (parts[0] < allowedMin || parts[1] > allowedMax)
+    (minValue < allowedMin || maxValue > allowedMax)
   ) {
     return {
       valid: false,
@@ -802,6 +817,16 @@ function validateScaleRangeInput() {
   }
 
   return { valid: true };
+}
+
+function buildScaleRangeValue() {
+  const minRaw = elements.scaleMinInput.value.trim();
+  const maxRaw = elements.scaleMaxInput.value.trim();
+  if (!minRaw || !maxRaw) {
+    return "";
+  }
+
+  return `${minRaw},${maxRaw}`;
 }
 
 function normalizePaletteList(candidate) {
@@ -844,8 +869,12 @@ function updateLegend(layer, params = null) {
   }
 
   const legendUrl = new URL(selectedStyle.legendUrl, window.location.href);
-  if (params?.palette) {
-    legendUrl.searchParams.set("PALETTE", params.palette);
+  if (params?.styles) {
+    legendUrl.searchParams.set("STYLES", params.styles);
+  }
+  const scaleRangeValue = buildScaleRangeValue();
+  if (scaleRangeValue) {
+    legendUrl.searchParams.set("COLORSCALERANGE", scaleRangeValue);
   }
   if (params?.numcolorbands) {
     legendUrl.searchParams.set("NUMCOLORBANDS", params.numcolorbands);
@@ -913,7 +942,8 @@ function setControlsEnabled(enabled) {
     elements.timeSelect,
     elements.elevationSelect,
     elements.paletteSelect,
-    elements.colorsRangeInput,
+    elements.scaleMinInput,
+    elements.scaleMaxInput,
     elements.numBandsInput,
     elements.opacityInput,
     elements.belowMinColorSelect,
@@ -935,6 +965,16 @@ function getSelectedLayer() {
 function inferPaletteName(styleName) {
   const parts = styleName.split("/");
   return parts[1] || "default";
+}
+
+function buildStyleValue(selectedStyle, selectedPalette) {
+  if (!selectedStyle) {
+    return "";
+  }
+
+  const [styleName, existingPalette = "default"] = selectedStyle.split("/");
+  const paletteName = selectedPalette || existingPalette;
+  return paletteName ? `${styleName}/${paletteName}` : styleName;
 }
 
 function mergeUnique(first, second) {

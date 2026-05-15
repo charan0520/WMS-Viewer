@@ -127,6 +127,11 @@ h2 {
   font-weight: 600;
 }
 
+.compact-label {
+  font-size: 0.82rem;
+  margin-bottom: 5px;
+}
+
 .input-row {
   display: grid;
   grid-template-columns: 1fr auto;

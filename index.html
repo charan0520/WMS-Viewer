@@ -88,8 +88,18 @@
           <select id="palette-select" disabled></select>
         </div>
         <div class="field">
-          <label class="field-label" for="colors-range-input">Color scale range</label>
-          <input id="colors-range-input" type="text" placeholder="auto or min,max" disabled>
+          <label class="field-label">Color scale range</label>
+          <div class="dual-field">
+            <div>
+              <label class="field-label compact-label" for="scale-min-input">Scale min</label>
+              <input id="scale-min-input" type="number" step="any" disabled>
+            </div>
+            <div>
+              <label class="field-label compact-label" for="scale-max-input">Scale max</label>
+              <input id="scale-max-input" type="number" step="any" disabled>
+            </div>
+          </div>
+          <span id="scale-range-hint" class="inline-value">Allowed range will appear here.</span>
         </div>
         <div class="field">
           <label class="field-label" for="num-bands-input">Color bands</label>
