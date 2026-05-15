@@ -861,23 +861,34 @@ function normalizePaletteList(candidate) {
 }
 
 function updateLegend(layer, params = null) {
-  const selectedStyle = layer.styles.find((style) => style.name === elements.styleSelect.value) || layer.styles[0];
-  if (!selectedStyle?.legendUrl) {
+  if (!state.serviceUrl) {
     elements.legendImage.style.display = "none";
     elements.legendLink.href = "#";
     return;
   }
 
-  const legendUrl = new URL(selectedStyle.legendUrl, window.location.href);
-  if (params?.styles) {
-    legendUrl.searchParams.set("STYLES", params.styles);
-  }
+  const activeParams = params || buildLayerParams(layer);
+  const legendUrl = new URL(state.serviceUrl, window.location.href);
+  legendUrl.searchParams.set("REQUEST", "GetLegendGraphic");
+  legendUrl.searchParams.set("LAYER", layer.name);
+  legendUrl.searchParams.set("LAYERS", layer.name);
+  legendUrl.searchParams.set("STYLES", activeParams.styles || "");
+
   const scaleRangeValue = buildScaleRangeValue();
   if (scaleRangeValue) {
     legendUrl.searchParams.set("COLORSCALERANGE", scaleRangeValue);
   }
-  if (params?.numcolorbands) {
-    legendUrl.searchParams.set("NUMCOLORBANDS", params.numcolorbands);
+  if (activeParams.NUMCOLORBANDS) {
+    legendUrl.searchParams.set("NUMCOLORBANDS", activeParams.NUMCOLORBANDS);
+  }
+  if (activeParams.BELOWMINCOLOR) {
+    legendUrl.searchParams.set("BELOWMINCOLOR", activeParams.BELOWMINCOLOR);
+  }
+  if (activeParams.ABOVEMAXCOLOR) {
+    legendUrl.searchParams.set("ABOVEMAXCOLOR", activeParams.ABOVEMAXCOLOR);
+  }
+  if (activeParams.LOGSCALE) {
+    legendUrl.searchParams.set("LOGSCALE", activeParams.LOGSCALE);
   }
 
   elements.legendImage.src = legendUrl.toString();
