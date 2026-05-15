@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WMS Model Viewer</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  >
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="panel">
+        <p class="eyebrow">Model Viewer</p>
+        <h1>WMS Explorer</h1>
+        <p class="intro">
+          Paste a WMS GetCapabilities URL or service endpoint, load the available layers,
+          and preview them on a Leaflet map with model-specific options.
+        </p>
+      </div>
+
+      <div class="panel">
+        <label class="field-label" for="wms-url">WMS URL</label>
+        <div class="input-row">
+          <input
+            id="wms-url"
+            type="url"
+            spellcheck="false"
+            value="http://gulfhub.tamucc.edu/thredds/wms/UGOS3/MASTR_MODELS/ROFS_latest/txla2_his_f_latest_z.nc"
+            placeholder="https://example.com/wms"
+          >
+          <button id="load-button" type="button">Load</button>
+        </div>
+        <p class="hint">
+          Works with standard WMS 1.3.0 services and ncWMS-style extensions when present.
+        </p>
+        <p class="hint">
+          If direct browser requests are blocked, the viewer can retry through <code>proxy.php</code> on the same local server.
+        </p>
+        <p id="status-message" class="status" role="status">Ready.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Layer</h2>
+        <div class="field">
+          <label class="field-label" for="layer-select">Available layers</label>
+          <select id="layer-select" disabled></select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="style-select">Style</label>
+          <select id="style-select" disabled></select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="format-select">Image format</label>
+          <select id="format-select" disabled></select>
+        </div>
+        <div class="field checkbox-field">
+          <input id="transparent-toggle" type="checkbox" checked>
+          <label for="transparent-toggle">Transparent background</label>
+        </div>
+        <div class="field checkbox-field">
+          <input id="autofit-toggle" type="checkbox" checked>
+          <label for="autofit-toggle">Fit map to selected layer extent</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Dimensions</h2>
+        <div class="field">
+          <label class="field-label" for="time-select">Time</label>
+          <select id="time-select" disabled></select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="elevation-select">Depth / elevation</label>
+          <select id="elevation-select" disabled></select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Rendering</h2>
+        <div class="field">
+          <label class="field-label" for="palette-select">Palette</label>
+          <select id="palette-select" disabled></select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="colors-range-input">Color scale range</label>
+          <input id="colors-range-input" type="text" placeholder="auto or min,max" disabled>
+        </div>
+        <div class="field">
+          <label class="field-label" for="num-bands-input">Color bands</label>
+          <input id="num-bands-input" type="number" min="2" max="250" step="1" placeholder="250" disabled>
+        </div>
+        <div class="field">
+          <label class="field-label" for="opacity-input">Opacity</label>
+          <input id="opacity-input" type="range" min="0" max="100" step="1" value="85" disabled>
+          <span id="opacity-value" class="inline-value">85%</span>
+        </div>
+        <div class="field dual-field">
+          <div>
+            <label class="field-label" for="below-min-color-select">Below min color</label>
+            <select id="below-min-color-select" disabled></select>
+          </div>
+          <div>
+            <label class="field-label" for="above-max-color-select">Above max color</label>
+            <select id="above-max-color-select" disabled></select>
+          </div>
+        </div>
+        <div class="field checkbox-field">
+          <input id="logscale-toggle" type="checkbox" disabled>
+          <label for="logscale-toggle">Use logarithmic color scale</label>
+        </div>
+        <div class="field">
+          <label class="field-label" for="extra-params-input">Extra WMS parameters</label>
+          <textarea
+            id="extra-params-input"
+            rows="3"
+            placeholder="Optional JSON, for example {&quot;VERSION&quot;:&quot;1.3.0&quot;}"
+            disabled
+          ></textarea>
+        </div>
+        <button id="apply-button" type="button" disabled>Apply To Map</button>
+      </div>
+
+      <div class="panel legend-panel">
+        <div class="legend-header">
+          <h2>Legend</h2>
+          <a id="legend-link" href="#" target="_blank" rel="noreferrer noopener">Open</a>
+        </div>
+        <img id="legend-image" alt="Legend preview">
+      </div>
+
+      <div class="panel metadata-panel">
+        <h2>Selection Summary</h2>
+        <dl id="layer-metadata" class="metadata-list"></dl>
+      </div>
+    </aside>
+
+    <main class="map-area">
+      <div id="map"></div>
+    </main>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="./app.js"></script>
+</body>
+</html>
