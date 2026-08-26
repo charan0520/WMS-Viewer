@@ -26,7 +26,6 @@ const state = {
   selectedLayerName: "",
   mapLayer: null,
   identifyMarker: null,
-  layerMetadataCache: new Map(),
   usingProxy: false,
 };
 
@@ -90,12 +89,16 @@ function wireEvents() {
     void updateControlValuesForSelection();
   });
 
+  elements.timeSelect.addEventListener("change", () => {
+    applySelectedLayerToMap();
+  });
+
   elements.opacityInput.addEventListener("input", () => {
     elements.opacityValue.textContent = `${elements.opacityInput.value}%`;
   });
 
   elements.applyButton.addEventListener("click", () => {
-    applySelectedLayerToMap();
+    applySelectedLayerToMap({ fitToLayer: false });
   });
 
   map.on("click", (event) => {
@@ -137,11 +140,10 @@ async function loadCapabilitiesFromInput() {
     state.capabilitiesXml = documentXml;
     state.capabilities = capabilities;
     state.selectedLayerName = capabilities.layers[0].name;
-    state.layerMetadataCache.clear();
 
     populateServiceControls(capabilities);
     await updateControlValuesForSelection();
-    applySelectedLayerToMap();
+    applySelectedLayerToMap({ fitToLayer: false });
     setControlsEnabled(true);
     setStatus(
       `Loaded ${capabilities.layers.length} layer${capabilities.layers.length === 1 ? "" : "s"}${state.usingProxy ? " via proxy" : ""}.`,
@@ -251,7 +253,8 @@ function expandDimensionValues(rawText, dimensionName) {
   }
 
   const trimmed = rawText.trim();
-  if (trimmed.includes("/") && trimmed.includes("PT")) {
+  const rangeParts = trimmed.split("/");
+  if (rangeParts.length === 3 && parseIsoDurationToMilliseconds(rangeParts[2])) {
     return expandIsoRange(trimmed, dimensionName === "time");
   }
 
@@ -417,7 +420,7 @@ function populateDimensionSelect(selectElement, dimension, emptyLabel) {
   selectElement.disabled = false;
 }
 
-function applySelectedLayerToMap() {
+function applySelectedLayerToMap({ fitToLayer = elements.autofitToggle.checked } = {}) {
   const layer = getSelectedLayer();
   if (!layer) {
     setStatus("Choose a layer before applying.", true);
@@ -437,7 +440,7 @@ function applySelectedLayerToMap() {
 
   state.mapLayer = L.tileLayer.wms(state.serviceUrl, params).addTo(map);
 
-  if (elements.autofitToggle.checked && layer.bounds) {
+  if (fitToLayer && layer.bounds) {
     map.fitBounds([
       [layer.bounds.south, layer.bounds.west],
       [layer.bounds.north, layer.bounds.east],
@@ -460,8 +463,9 @@ function buildLayerParams(layer) {
     format: elements.formatSelect.value || "image/png",
     transparent: String(elements.transparentToggle.checked),
     opacity: Number(elements.opacityInput.value) / 100,
-    _cacheBust: Date.now(),
   };
+
+  params.crs = L.CRS.EPSG4326;
 
   if (elements.timeSelect.value) {
     params.TIME = elements.timeSelect.value;
@@ -564,10 +568,6 @@ function stripQuery(url) {
 }
 
 async function fetchLayerMetadata(layerName) {
-  if (state.layerMetadataCache.has(layerName)) {
-    return state.layerMetadataCache.get(layerName);
-  }
-
   const url = new URL(state.serviceUrl, window.location.href);
   url.searchParams.set("request", "GetMetadata");
   url.searchParams.set("item", "layerDetails");
@@ -580,30 +580,48 @@ async function fetchLayerMetadata(layerName) {
     }
 
     const metadata = await response.json();
-    state.layerMetadataCache.set(layerName, metadata);
     return metadata;
   } catch (error) {
     console.warn(`Palette metadata unavailable for ${layerName}:`, error);
-    state.layerMetadataCache.set(layerName, null);
     return null;
   }
 }
 
 async function fetchWithProxyFallback(url) {
-  try {
-    return await fetch(url);
-  } catch (directError) {
-    const proxyResponse = await fetch(buildProxyUrl(url));
-    if (!proxyResponse.ok) {
-      const proxyMessage = await readProxyError(proxyResponse);
-      throw new Error(
-        `${directError.message}. Direct fetch failed, and proxy returned ${proxyResponse.status}${proxyMessage ? `: ${proxyMessage}` : ""}.`,
-      );
-    }
+  let directResponse = null;
 
-    state.usingProxy = true;
-    return proxyResponse;
+  try {
+    directResponse = await fetch(url);
+    if (directResponse.ok) {
+      return directResponse;
+    }
+  } catch (directError) {
+    try {
+      const proxyResponse = await fetch(buildProxyUrl(url));
+      if (!proxyResponse.ok) {
+        const proxyMessage = await readProxyError(proxyResponse);
+        throw new Error(
+          `${directError.message}. Direct fetch failed, and proxy returned ${proxyResponse.status}${proxyMessage ? `: ${proxyMessage}` : ""}.`,
+        );
+      }
+
+      state.usingProxy = true;
+      return proxyResponse;
+    } catch (proxyError) {
+      throw proxyError;
+    }
   }
+
+  const proxyResponse = await fetch(buildProxyUrl(url));
+  if (!proxyResponse.ok) {
+    const proxyMessage = await readProxyError(proxyResponse);
+    throw new Error(
+      `Direct fetch returned ${directResponse.status}, and proxy returned ${proxyResponse.status}${proxyMessage ? `: ${proxyMessage}` : ""}.`,
+    );
+  }
+
+  state.usingProxy = true;
+  return proxyResponse;
 }
 
 function buildProxyUrl(url) {
@@ -901,8 +919,8 @@ function updateMetadata(layer, params = null) {
     ["Title", layer.title],
     ["Layer Name", layer.name],
     ["Queryable", layer.queryable ? "Yes" : "No"],
-    ["Time", params?.time || layer.timeDimension?.defaultValue || "Server default"],
-    ["Depth", params?.elevation || layer.elevationDimension?.defaultValue || "Server default"],
+    ["Time", params?.TIME || layer.timeDimension?.defaultValue || "Server default"],
+    ["Depth", params?.ELEVATION || layer.elevationDimension?.defaultValue || "Server default"],
     ["Style", params?.styles || "Default"],
     ["Format", params?.format || "image/png"],
     ["Bounds", layer.bounds ? `${layer.bounds.west}, ${layer.bounds.south} to ${layer.bounds.east}, ${layer.bounds.north}` : "Unknown"],
