@@ -159,7 +159,6 @@ function parseCapabilities(documentXml, rawUrl) {
   const capabilityNode = firstNode(rootNode, "Capability");
   const topLayerNode = firstNode(capabilityNode, "Layer");
   const requestNode = firstNode(capabilityNode, "Request");
-  const serviceEndpoint = extractOnlineResource(requestNode, rawUrl) || rawUrl;
   const formats = readFormats(requestNode);
   const topCrs = getChildTextList(topLayerNode, "CRS");
 
@@ -172,7 +171,7 @@ function parseCapabilities(documentXml, rawUrl) {
   return {
     version: rootNode.getAttribute("version") || "1.3.0",
     title: getChildText(firstNode(rootNode, "Service"), "Title") || "WMS Service",
-    serviceUrl: stripQuery(serviceEndpoint),
+    serviceUrl: stripQuery(rawUrl),
     formats,
     layers,
   };
@@ -382,29 +381,13 @@ async function populateScaleRange(layer) {
   if (!scaleRange) {
     elements.scaleMinInput.value = "";
     elements.scaleMaxInput.value = "";
-    elements.scaleMinInput.min = "";
-    elements.scaleMinInput.max = "";
-    elements.scaleMaxInput.min = "";
-    elements.scaleMaxInput.max = "";
-    elements.scaleMinInput.dataset.allowedMin = "";
-    elements.scaleMinInput.dataset.allowedMax = "";
-    elements.scaleMaxInput.dataset.allowedMin = "";
-    elements.scaleMaxInput.dataset.allowedMax = "";
-    elements.scaleRangeHint.textContent = "Allowed range not advertised for this layer.";
+    elements.scaleRangeHint.textContent = "Default range not advertised for this layer. Enter a custom range.";
     return;
   }
 
   elements.scaleMinInput.value = String(scaleRange.min);
   elements.scaleMaxInput.value = String(scaleRange.max);
-  elements.scaleMinInput.min = String(scaleRange.min);
-  elements.scaleMinInput.max = String(scaleRange.max);
-  elements.scaleMaxInput.min = String(scaleRange.min);
-  elements.scaleMaxInput.max = String(scaleRange.max);
-  elements.scaleMinInput.dataset.allowedMin = String(scaleRange.min);
-  elements.scaleMinInput.dataset.allowedMax = String(scaleRange.max);
-  elements.scaleMaxInput.dataset.allowedMin = String(scaleRange.min);
-  elements.scaleMaxInput.dataset.allowedMax = String(scaleRange.max);
-  elements.scaleRangeHint.textContent = `Allowed range: ${scaleRange.min} to ${scaleRange.max}`;
+  elements.scaleRangeHint.textContent = `Default range: ${scaleRange.min} to ${scaleRange.max}. Custom values are allowed.`;
 }
 
 function populateDimensionSelect(selectElement, dimension, emptyLabel) {
@@ -655,16 +638,6 @@ function readFormats(requestNode) {
   return formats.length ? formats : ["image/png"];
 }
 
-function extractOnlineResource(requestNode, fallbackUrl) {
-  const getMapNode = Array.from(requestNode.children).find((node) => localNameOf(node) === "GetMap");
-  if (!getMapNode) {
-    return fallbackUrl;
-  }
-
-  const onlineResource = getMapNode.querySelector("OnlineResource");
-  return onlineResource?.getAttribute("xlink:href") || onlineResource?.getAttribute("href") || fallbackUrl;
-}
-
 function extractLegendUrl(styleNode) {
   const resource = styleNode.querySelector("LegendURL OnlineResource");
   return resource?.getAttribute("xlink:href") || resource?.getAttribute("href") || "";
@@ -819,19 +792,6 @@ function validateScaleRangeInput() {
 
   if (minValue > maxValue) {
     return { valid: false, message: "Color scale range minimum must be less than or equal to the maximum." };
-  }
-
-  const allowedMin = Number(elements.scaleMinInput.dataset.allowedMin);
-  const allowedMax = Number(elements.scaleMinInput.dataset.allowedMax);
-  if (
-    Number.isFinite(allowedMin) &&
-    Number.isFinite(allowedMax) &&
-    (minValue < allowedMin || maxValue > allowedMax)
-  ) {
-    return {
-      valid: false,
-      message: `Color scale range must stay within ${allowedMin},${allowedMax} for this layer.`,
-    };
   }
 
   return { valid: true };
